@@ -875,13 +875,53 @@ app.post('/api/attendance', authenticateToken, authorizeRoles('admin', 'teacher'
 // FEES ROUTES
 // ===============================
 
-// GET fees for a student
+// GET fees for a student (path format)
 app.get('/api/fees/student/:id', authenticateToken, async (req, res) => {
     try {
         const fees = await pool.query(
             'SELECT * FROM fees WHERE student_id = $1 ORDER BY due_date DESC',
             [req.params.id]
         );
+        res.json(fees.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET fees (query format: /api/fees?student_id=1&academic_year=2024&status=pending)
+app.get('/api/fees', authenticateToken, async (req, res) => {
+    try {
+        let sql = `SELECT f.*, s.first_name || ' ' || s.last_name as student_name 
+                   FROM fees f 
+                   LEFT JOIN students s ON f.student_id = s.student_id 
+                   WHERE 1=1`;
+        const params = [];
+        let paramCount = 0;
+
+        const studentId = req.query.student_id || req.query.studentId;
+        if (studentId) {
+            paramCount++;
+            sql += ` AND f.student_id = ${paramCount}`;
+            params.push(studentId);
+        }
+
+        const academicYear = req.query.academic_year || req.query.academicYear;
+        if (academicYear) {
+            paramCount++;
+            sql += ` AND f.academic_year = ${paramCount}`;
+            params.push(academicYear);
+        }
+
+        const status = req.query.status;
+        if (status && status !== '') {
+            paramCount++;
+            sql += ` AND f.status = ${paramCount}`;
+            params.push(status);
+        }
+
+        sql += ' ORDER BY f.due_date DESC';
+
+        const fees = await pool.query(sql, params);
         res.json(fees.rows);
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
