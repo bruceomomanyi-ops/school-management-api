@@ -1,93 +1,133 @@
-# School Management API
+# School Management System Backend
 
-A backend API for managing school operations including students, teachers, courses, grades, and more.
+Node.js Express API for School Management System
 
-## 🚀 Features
+## Prerequisites
 
-- RESTful API architecture
-- Database integration
-- File upload support
-- Secure password hashing
-- Environment variable configuration
+- Node.js 18+
+- MySQL 8.0+
 
-## 📋 Prerequisites
+## Installation
 
-- Node.js (v14 or higher)
-- npm or yarn
-- Database (MySQL/PostgreSQL)
-
-## 🛠️ Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/bruceomomanyi-ops/school-management-api.git
-cd school-management-api
-```
-
-2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your database and configuration settings
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_USER=myuser
+DB_PASSWORD=MyStrongPass123!
+DB_NAME=school_management
+
+# Server Configuration
+PORT=3000
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
 ```
 
-4. Initialize the database:
-```bash
-# Run the database schema
-mysql -u your_username -p your_database_name < database/schema.sql
+## Database Setup
+
+1. Create the database:
+```sql
+CREATE DATABASE school_management;
 ```
 
-5. Start the server:
+2. Run the schema:
+```bash
+mysql -u root -p school_management < database/schema.sql
+```
+
+## Development
+
+```bash
+npm run dev
+```
+
+## Production
+
 ```bash
 npm start
-# OR for development
-node index.js
 ```
 
-## 📁 Project Structure
+## Deploy to Render.com
 
-```
-school-management-api/
-├── database/
-│   └── schema.sql          # Database schema
-├── uploads/                # Uploaded files
-├── index.js               # Main entry point
-├── package.json           # Dependencies
-├── .env.example           # Environment variables template
-├── .gitignore             # Git ignore rules
-└── README.md              # This file
+### 1. Create GitHub Repository
+Push this code to GitHub:
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/yourusername/school_app_backend.git
+git push -u origin main
 ```
 
-## 🔧 Environment Variables
+### 2. Create MySQL Database on Render
+1. Go to https://dashboard.render.com
+2. Click "New" → "PostgreSQL" or "MySQL"
+3. Configure:
+   - Name: `school-db`
+   - Database: `school_management`
+   - User: `school_user`
+4. Wait for database to be provisioned
+5. Copy the internal database URL
 
-Create a `.env` file with the following variables:
+### 3. Create Web Service on Render
+1. Click "New" → "Web Service"
+2. Connect your GitHub repository
+3. Configure:
+   - Name: `school-api`
+   - Root Directory: `/` (leave default)
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+4. Add Environment Variables:
+   - `DB_HOST`: from MySQL connection
+   - `DB_USER`: from MySQL connection
+   - `DB_PASSWORD`: from MySQL connection
+   - `DB_NAME`: `school_management`
+   - `JWT_SECRET`: generate a strong random string
+   - `PORT`: `10000` (Render assigns this automatically)
 
-```
-DB_HOST=localhost
-DB_USER=your_username
-DB_PASSWORD=your_password
-DB_NAME=school_management
-PORT=3000
-```
+### 4. Run Database Schema
+1. In Render dashboard, go to your MySQL database
+2. Click "psql" shell or use a MySQL client
+3. Copy contents of `database/schema.sql` and run
 
-## 📚 API Endpoints
+### 5. Get Your Backend URL
+After deployment, your API will be at:
+`https://school-api-xxxx.onrender.com`
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/... | Retrieve data |
-| POST | /api/... | Create new data |
-| PUT | /api/... | Update data |
-| DELETE | /api/... | Delete data |
+## API Endpoints
 
-## 👤 Author
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Get current user
 
-- GitHub: [@bruceomomanyi-ops](https://github.com/bruceomomanyi-ops)
-- Email: bruceomomanyi@gmail.com
+### Students
+- `GET /api/students` - List all students
+- `GET /api/students/:id` - Get single student
+- `POST /api/students` - Create student (admin/teacher)
+- `PUT /api/students/:id` - Update student (admin/teacher)
+- `DELETE /api/students/:id` - Delete student (admin)
 
-## 📄 License
+### Teachers
+- `GET /api/teachers` - List all teachers
+- `GET /api/teachers/:id` - Get single teacher
+- `POST /api/teachers` - Create teacher (admin)
+- `PUT /api/teachers/:id` - Update teacher (admin)
 
-This project is licensed under the MIT License.
+### Classes
+- `GET /api/classes` - List all classes
+- `GET /api/classes/:id` - Get class with students
+
+## Default Admin Account
+
+After running the schema, create an admin user via the register endpoint:
+- Email: `admin@school.com`
+- Password: `admin123` (change in production!)
