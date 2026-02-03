@@ -21,7 +21,10 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'https://school-app-web.netlify.app', 'https://*.netlify.app'],
+    credentials: true
+}));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -752,7 +755,7 @@ app.post('/api/subjects', authenticateToken, authorizeRoles('admin'), [
 // GRADES ROUTES
 // ===============================
 
-// GET grades for a student
+// GET grades for a student (path format)
 app.get('/api/grades/student/:id', authenticateToken, async (req, res) => {
     try {
         const grades = await pool.query(
@@ -763,6 +766,28 @@ app.get('/api/grades/student/:id', authenticateToken, async (req, res) => {
              WHERE g.student_id = $1
              ORDER BY g.graded_at DESC`,
             [req.params.id]
+        );
+        res.json(grades.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET grades for a student (query format: /api/grades?student_id=1)
+app.get('/api/grades', authenticateToken, async (req, res) => {
+    try {
+        const studentId = req.query.student_id || req.query.studentId;
+        if (!studentId) {
+            return res.status(400).json({ error: 'student_id required' });
+        }
+        const grades = await pool.query(
+            `SELECT g.*, s.subject_name, c.class_name
+             FROM grades g
+             JOIN subjects s ON g.subject_id = s.subject_id
+             JOIN classes c ON g.class_id = c.class_id
+             WHERE g.student_id = $1
+             ORDER BY g.graded_at DESC`,
+            [studentId]
         );
         res.json(grades.rows);
     } catch (err) {
