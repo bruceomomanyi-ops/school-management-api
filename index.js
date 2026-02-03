@@ -52,10 +52,169 @@ const initDatabase = async () => {
         // Test connection
         const client = await pool.connect();
         console.log('✅ Connected to PostgreSQL database');
+        
+        // Create tables if they don't exist
+        await pool.query(`
+            -- Users table
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'teacher', 'student', 'parent')),
+                linked_student_id INTEGER NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Students table
+            CREATE TABLE IF NOT EXISTS students (
+                student_id SERIAL PRIMARY KEY,
+                first_name VARCHAR(100) NOT NULL,
+                last_name VARCHAR(100) NOT NULL,
+                date_of_birth DATE NOT NULL,
+                gender VARCHAR(20) NOT NULL CHECK (gender IN ('male', 'female', 'other')),
+                admission_number VARCHAR(50) NOT NULL UNIQUE,
+                date_admitted DATE NOT NULL,
+                class_id INTEGER NULL,
+                address TEXT NULL,
+                phone VARCHAR(20) NULL,
+                parent_id INTEGER NULL,
+                status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'graduated')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Teachers table
+            CREATE TABLE IF NOT EXISTS teachers (
+                teacher_id SERIAL PRIMARY KEY,
+                first_name VARCHAR(100) NOT NULL,
+                last_name VARCHAR(100) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                phone VARCHAR(20) NULL,
+                subject_specialization VARCHAR(200) NOT NULL,
+                hire_date DATE NULL,
+                salary DECIMAL(10, 2) NULL,
+                status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'on_leave')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Classes table
+            CREATE TABLE IF NOT EXISTS classes (
+                class_id SERIAL PRIMARY KEY,
+                class_name VARCHAR(100) NOT NULL,
+                grade_level INTEGER NOT NULL,
+                class_teacher_id INTEGER NULL,
+                academic_year VARCHAR(20) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Subjects table
+            CREATE TABLE IF NOT EXISTS subjects (
+                subject_id SERIAL PRIMARY KEY,
+                subject_name VARCHAR(100) NOT NULL,
+                subject_code VARCHAR(50) NULL,
+                description TEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Teacher Subjects table
+            CREATE TABLE IF NOT EXISTS teacher_subjects (
+                assignment_id SERIAL PRIMARY KEY,
+                teacher_id INTEGER NOT NULL,
+                subject_id INTEGER NOT NULL,
+                class_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(teacher_id, subject_id, class_id)
+            );
+        
+            -- Grades table
+            CREATE TABLE IF NOT EXISTS grades (
+                grade_id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL,
+                subject_id INTEGER NOT NULL,
+                class_id INTEGER NOT NULL,
+                teacher_id INTEGER NOT NULL,
+                exam_type VARCHAR(20) NOT NULL CHECK (exam_type IN ('test', 'midterm', 'final', 'assignment', 'project')),
+                grade DECIMAL(5, 2) NOT NULL,
+                max_grade DECIMAL(5, 2) DEFAULT 100,
+                comments TEXT NULL,
+                graded_at DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Attendance table
+            CREATE TABLE IF NOT EXISTS attendance (
+                attendance_id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL,
+                class_id INTEGER NOT NULL,
+                date DATE NOT NULL,
+                status VARCHAR(20) NOT NULL CHECK (status IN ('present', 'absent', 'late', 'excused')),
+                remarks TEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(student_id, class_id, date)
+            );
+        
+            -- Fees table
+            CREATE TABLE IF NOT EXISTS fees (
+                fee_id SERIAL PRIMARY KEY,
+                student_id INTEGER NOT NULL,
+                fee_type VARCHAR(100) NOT NULL,
+                amount DECIMAL(10, 2) NOT NULL,
+                due_date DATE NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'overdue', 'waived')),
+                payment_date DATE NULL,
+                payment_method VARCHAR(50) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Events table
+            CREATE TABLE IF NOT EXISTS events (
+                event_id SERIAL PRIMARY KEY,
+                title VARCHAR(200) NOT NULL,
+                description TEXT NULL,
+                event_date DATE NOT NULL,
+                event_time TIME NULL,
+                location VARCHAR(255) NULL,
+                created_by INTEGER NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        console.log('✅ Database tables ensured');
+        
+        // Insert sample data
+        await pool.query(`
+            INSERT INTO subjects (subject_name, subject_code, description) VALUES
+            ('Mathematics', 'MATH', 'Basic mathematics'),
+            ('English', 'ENG', 'English language'),
+            ('Science', 'SCI', 'General science'),
+            ('Social Studies', 'SST', 'Social studies'),
+            ('Physics', 'PHY', 'Physics'),
+            ('Chemistry', 'CHEM', 'Chemistry'),
+            ('Biology', 'BIO', 'Biology'),
+            ('History', 'HIST', 'World history')
+            ON CONFLICT DO NOTHING;
+        
+            INSERT INTO classes (class_name, grade_level, academic_year) VALUES
+            ('Grade 1', 1, '2024'),
+            ('Grade 2', 2, '2024'),
+            ('Grade 3', 3, '2024'),
+            ('Grade 4', 4, '2024'),
+            ('Grade 5', 5, '2024'),
+            ('Grade 6', 6, '2024'),
+            ('Form 1', 7, '2024'),
+            ('Form 2', 8, '2024'),
+            ('Form 3', 9, '2024'),
+            ('Form 4', 10, '2024')
+            ON CONFLICT DO NOTHING;
+        `);
+        console.log('✅ Sample data inserted');
+        
         client.release();
     } catch (err) {
-        console.error('❌ Database connection failed:', err.message);
-        // Continue anyway - schema should be run manually
+        console.error('❌ Database initialization failed:', err.message);
     }
 };
 
