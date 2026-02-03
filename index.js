@@ -49,6 +49,27 @@ const formatResult = (result) => {
     return { rows: result.rows, rowCount: result.rowCount };
 };
 
+// Helper function to convert snake_case to camelCase
+const toCamelCase = (obj) => {
+    if (Array.isArray(obj)) {
+        return obj.map(toCamelCase);
+    }
+    if (obj && typeof obj === 'object') {
+        const newObj = {};
+        for (const key in obj) {
+            const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+            newObj[camelKey] = obj[key];
+        }
+        return newObj;
+    }
+    return obj;
+};
+
+// Helper to convert array results to camelCase
+const toCamelCaseArray = (rows) => {
+    return rows.map(toCamelCase);
+};
+
 // 4. Database initialization
 const initDatabase = async () => {
     try {
@@ -365,7 +386,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         if (users.rows.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.json(users.rows[0]);
+        res.json(toCamelCase(users.rows[0]));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -412,7 +433,7 @@ app.get('/api/students', authenticateToken, async (req, res) => {
         sql += ' ORDER BY s.created_at DESC';
 
         const students = await pool.query(sql, params);
-        res.json(students.rows);
+        res.json(toCamelCaseArray(students.rows));
     } catch (err) {
         console.error('Get students error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -436,7 +457,7 @@ app.get('/api/students/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Student not found' });
         }
 
-        res.json(students.rows[0]);
+        res.json(toCamelCase(students.rows[0]));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -537,7 +558,7 @@ app.delete('/api/students/:id', authenticateToken, authorizeRoles('admin'), asyn
 app.get('/api/teachers', authenticateToken, async (req, res) => {
     try {
         const teachers = await pool.query('SELECT * FROM teachers ORDER BY created_at DESC');
-        res.json(teachers.rows);
+        res.json(toCamelCaseArray(teachers.rows));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -562,7 +583,7 @@ app.get('/api/teachers/:id', authenticateToken, async (req, res) => {
             [req.params.id]
         );
 
-        res.json({ ...teachers.rows[0], assignments: assignments.rows });
+        res.json({ ...toCamelCase(teachers.rows[0]), assignments: toCamelCaseArray(assignments.rows) });
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -634,7 +655,7 @@ app.get('/api/classes', authenticateToken, async (req, res) => {
              LEFT JOIN teachers t ON c.class_teacher_id = t.teacher_id
              ORDER BY c.grade_level, c.class_name`
         );
-        res.json(classes.rows);
+        res.json(toCamelCaseArray(classes.rows));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -671,7 +692,7 @@ app.get('/api/classes/:id', authenticateToken, async (req, res) => {
             [req.params.id]
         );
 
-        res.json({ ...classes.rows[0], students: students.rows, subjects: subjects.rows });
+        res.json({ ...toCamelCase(classes.rows[0]), students: toCamelCaseArray(students.rows), subjects: toCamelCaseArray(subjects.rows) });
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -726,7 +747,7 @@ app.put('/api/classes/:id', authenticateToken, authorizeRoles('admin'), async (r
 app.get('/api/subjects', authenticateToken, async (req, res) => {
     try {
         const subjects = await pool.query('SELECT * FROM subjects ORDER BY subject_name');
-        res.json(subjects.rows);
+        res.json(toCamelCaseArray(subjects.rows));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -839,7 +860,7 @@ app.get('/api/attendance/student/:id', authenticateToken, async (req, res) => {
         sql += ' ORDER BY date DESC';
         
         const attendance = await pool.query(sql, params);
-        res.json(attendance.rows);
+        res.json(toCamelCaseArray(attendance.rows));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
@@ -980,7 +1001,7 @@ app.get('/api/events', authenticateToken, async (req, res) => {
         const events = await pool.query(
             'SELECT * FROM events ORDER BY event_date DESC'
         );
-        res.json(events.rows);
+        res.json(toCamelCaseArray(events.rows));
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
