@@ -212,6 +212,15 @@ const initDatabase = async () => {
         `);
         console.log('✅ Sample data inserted');
         
+        // Create default admin user
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await pool.query(`
+            INSERT INTO users (email, password_hash, role) 
+            VALUES ($1, $2, $3)
+            ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = $3
+        `, ['admin@school.com', hashedPassword, 'admin']);
+        console.log('✅ Admin user created (admin@school.com / admin123)');
+        
         client.release();
     } catch (err) {
         console.error('❌ Database initialization failed:', err.message);
