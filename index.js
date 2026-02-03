@@ -967,6 +967,49 @@ app.post('/api/events', authenticateToken, authorizeRoles('admin', 'teacher'), [
 });
 
 // ===============================
+// DASHBOARD
+// ===============================
+
+app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+    try {
+        // Get counts
+        const students = await pool.query('SELECT COUNT(*) as count FROM students WHERE status = $1', ['active']);
+        const teachers = await pool.query('SELECT COUNT(*) as count FROM teachers WHERE status = $1', ['active']);
+        const classes = await pool.query('SELECT COUNT(*) as count FROM classes');
+        
+        // Get today's attendance
+        const today = new Date().toISOString().split('T')[0];
+        const present = await pool.query(
+            "SELECT COUNT(*) as count FROM attendance WHERE date = $1 AND status = 'present'",
+            [today]
+        );
+        const absent = await pool.query(
+            "SELECT COUNT(*) as count FROM attendance WHERE date = $1 AND status = 'absent'",
+            [today]
+        );
+        
+        // Get pending fees count
+        const pendingFees = await pool.query(
+            "SELECT COALESCE(SUM(amount), 0) as total FROM fees WHERE status = 'pending'"
+        );
+        
+        res.json({
+            students: parseInt(students.rows[0].count) || 0,
+            teachers: parseInt(teachers.rows[0].count) || 0,
+            classes: parseInt(classes.rows[0].count) || 0,
+            pending_fees: parseFloat(pendingFees.rows[0].total) || 0,
+            attendance_today: {
+                present: parseInt(present.rows[0].count) || 0,
+                absent: parseInt(absent.rows[0].count) || 0
+            }
+        });
+    } catch (err) {
+        console.error('Dashboard stats error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// ===============================
 // HEALTH CHECK
 // ===============================
 
