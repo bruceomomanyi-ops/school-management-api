@@ -50,13 +50,13 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(uploadsDir));
-
 // 2. App setup
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadsDir));
 
 // Middleware
 app.use(cors({
