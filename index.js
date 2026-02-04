@@ -1182,7 +1182,7 @@ app.get('/api/documents/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// POST upload document (admin only)
+// POST upload document (admin only) - For Flutter web, use base64
 app.post('/api/documents', authenticateToken, authorizeRoles('admin'), upload.single('file'), [
     body('title').trim().notEmpty(),
     body('category').isIn(['general', 'report', 'notice', 'syllabus', 'exam', 'other']),
@@ -1216,6 +1216,48 @@ app.post('/api/documents', authenticateToken, authorizeRoles('admin'), upload.si
         });
     } catch (err) {
         console.error('Upload document error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST upload document (base64) - For Flutter web
+app.post('/api/documents/base64', authenticateToken, authorizeRoles('admin'), [
+    body('title').trim().notEmpty(),
+    body('file_data').notEmpty(),
+    body('filename').trim().notEmpty(),
+    body('category').optional().isIn(['general', 'report', 'notice', 'syllabus', 'exam', 'other']),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        const { title, description, file_data, filename, category, is_public } = req.body;
+        
+        // Decode base64 and save file
+        const buffer = Buffer.from(file_data, 'base64');
+        const uniqueFilename = Date.now() + '-' + Math.round(Math.random() * 1E9) + '-' + filename;
+        const filePath = path.join(uploadsDir, uniqueFilename);
+        fs.writeFileSync(filePath, buffer);
+        
+        const result = await pool.query(
+            `INSERT INTO documents (title, description, file_path, file_size, category, uploaded_by, is_public)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id`,
+            [
+                title,
+                description || null,
+                uniqueFilename,
+                buffer.length,
+                category || 'general',
+                req.user.user_id,
+                is_public === 'true' || is_public === true
+            ]
+        );
+        
+        res.status(201).json({
+            message: 'Document uploaded successfully',
+            document_id: result.rows[0].document_id,
+            file_url: `/uploads/${uniqueFilename}`
+        });
+    } catch (err) {
+        console.error('Upload document base64 error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
