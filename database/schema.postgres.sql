@@ -199,6 +199,27 @@ CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
 ALTER TABLE events ADD CONSTRAINT IF NOT EXISTS fk_events_creator 
     FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL;
 
+-- Documents table for PDF uploads
+CREATE TABLE IF NOT EXISTS documents (
+    document_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INTEGER NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'general' CHECK (category IN ('general', 'report', 'notice', 'syllabus', 'exam', 'other')),
+    uploaded_by INTEGER NULL,
+    is_public BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_documents_public ON documents(is_public);
+
+ALTER TABLE documents ADD CONSTRAINT IF NOT EXISTS fk_documents_uploader 
+    FOREIGN KEY (uploaded_by) REFERENCES users(user_id) ON DELETE SET NULL;
+
 -- Insert sample subjects
 INSERT INTO subjects (subject_name, subject_code, description) VALUES
 ('Mathematics', 'MATH', 'Basic mathematics'),

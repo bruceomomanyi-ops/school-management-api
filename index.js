@@ -15,6 +15,44 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// ===============================
+// FILE UPLOAD CONFIGURATION
+// ===============================
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for PDF uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        cb(new Error('Only PDF files are allowed!'), false);
+    }
+};
+
+const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadsDir));
+
 // 2. App setup
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -204,6 +242,20 @@ const initDatabase = async () => {
                 location VARCHAR(255) NULL,
                 created_by INTEGER NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        
+            -- Documents table for PDF uploads
+            CREATE TABLE IF NOT EXISTS documents (
+                document_id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                file_size INTEGER NULL,
+                category VARCHAR(50) NOT NULL DEFAULT 'general' CHECK (category IN ('general', 'report', 'notice', 'syllabus', 'exam', 'other')),
+                uploaded_by INTEGER NULL,
+                is_public BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
         console.log('✅ Database tables ensured');
@@ -1066,6 +1118,155 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
         });
     } catch (err) {
         console.error('Dashboard stats error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// ===============================
+// DOCUMENTS ROUTES (PDF Upload/Download)
+// ===============================
+
+// GET all documents (public or authenticated)
+app.get('/api/documents', authenticateToken, async (req, res) => {
+    try {
+        const category = req.query.category;
+        const search = req.query.search;
+        
+        let sql = `SELECT d.*, u.email as uploaded_by_email 
+                   FROM documents d 
+                   LEFT JOIN users u ON d.uploaded_by = u.user_id
+                   WHERE d.is_public = true OR d.uploaded_by = $1`;
+        const params = [req.user.user_id];
+        let paramCount = 1;
+        
+        if (category) {
+            paramCount++;
+            sql += ` AND d.category = ${paramCount}`;
+            params.push(category);
+        }
+        
+        if (search) {
+            paramCount++;
+            sql += ` AND (d.title ILIKE ${paramCount} OR d.description ILIKE ${paramCount})`;
+            params.push(`%${search}%`);
+        }
+        
+        sql += ' ORDER BY d.created_at DESC';
+        
+        const documents = await pool.query(sql, params);
+        res.json(documents.rows);
+    } catch (err) {
+        console.error('Get documents error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET single document
+app.get('/api/documents/:id', authenticateToken, async (req, res) => {
+    try {
+        const documents = await pool.query(
+            `SELECT d.*, u.email as uploaded_by_email 
+             FROM documents d 
+             LEFT JOIN users u ON d.uploaded_by = u.user_id
+             WHERE d.document_id = $1`,
+            [req.params.id]
+        );
+        
+        if (documents.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+        
+        res.json(documents.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST upload document (admin only)
+app.post('/api/documents', authenticateToken, authorizeRoles('admin'), upload.single('file'), [
+    body('title').trim().notEmpty(),
+    body('category').isIn(['general', 'report', 'notice', 'syllabus', 'exam', 'other']),
+    handleValidationErrors
+], async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        
+        const { title, description, category, is_public } = req.body;
+        
+        const result = await pool.query(
+            `INSERT INTO documents (title, description, file_path, file_size, category, uploaded_by, is_public)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING document_id`,
+            [
+                title,
+                description || null,
+                req.file.filename,
+                req.file.size,
+                category || 'general',
+                req.user.user_id,
+                is_public === 'true' || is_public === true
+            ]
+        );
+        
+        res.status(201).json({
+            message: 'Document uploaded successfully',
+            document_id: result.rows[0].document_id,
+            file_url: `/uploads/${req.file.filename}`
+        });
+    } catch (err) {
+        console.error('Upload document error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE document (admin only)
+app.delete('/api/documents/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        // Get document info first
+        const documents = await pool.query('SELECT * FROM documents WHERE document_id = $1', [req.params.id]);
+        
+        if (documents.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+        
+        const doc = documents.rows[0];
+        
+        // Delete file from filesystem
+        const filePath = path.join(uploadsDir, doc.file_path);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        
+        // Delete from database
+        await pool.query('DELETE FROM documents WHERE document_id = $1', [req.params.id]);
+        
+        res.json({ message: 'Document deleted successfully' });
+    } catch (err) {
+        console.error('Delete document error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Download document
+app.get('/api/documents/:id/download', authenticateToken, async (req, res) => {
+    try {
+        const documents = await pool.query('SELECT * FROM documents WHERE document_id = $1', [req.params.id]);
+        
+        if (documents.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+        
+        const doc = documents.rows[0];
+        const filePath = path.join(uploadsDir, doc.file_path);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found on server' });
+        }
+        
+        res.download(filePath, doc.title + '.pdf');
+    } catch (err) {
+        console.error('Download document error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
